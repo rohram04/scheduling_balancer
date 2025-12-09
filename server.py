@@ -28,6 +28,7 @@ class ExperimentRequest(BaseModel):
     cpu_method: str
     io: int
     mem_load: int
+    vm_workers: int
     duration: float
     interval: float
 
@@ -38,9 +39,10 @@ async def run_experiment(req: ExperimentRequest):
     Executes in a thread so the FastAPI server stays fast.
     """
     try:
+        # result = {}
         loop = asyncio.get_event_loop()
 
-        # Run experiment in background thread
+        # # Run experiment in background thread
         result = await loop.run_in_executor(
             executor,
             lambda: experiment(
@@ -49,6 +51,7 @@ async def run_experiment(req: ExperimentRequest):
                 req.cpu_method,
                 req.io,
                 req.mem_load,
+                req.vm_workers,
                 req.duration,
                 req.interval
             )

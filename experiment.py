@@ -10,20 +10,20 @@ from parse import parse_and_calculate_worker_metrics
 from state import RLStateBuilder
 
 schedulers = {
-    "bpfland": "/home/ubuntu/.cargo/bin/scx_bpfland",
-    "fifo": "/home/ubuntu/bin/scx_simple"
+    "bpfland": "/home/ecdb/.cargo/bin/scx_bpfland",
+    "fifo": "/home/ecdb/bin/scx_simple"
 }
 
 perf_folder = os.path.join('.', 'perf_data')
 
-def experiment(scheduler, cpu, cpu_method, io, mem_load, duration, interval):
+def experiment(scheduler, cpu, cpu_method, io, mem_load, vm_workers, duration, interval):
     exp_id = uuid.uuid4()
     results = {}
     if scheduler != "CFS":
         scx_process = subprocess.Popen(["sudo", schedulers[scheduler]], start_new_session=True)    
     # Start the stressor
     try:
-        stress_proc = start_stressor(cpu, cpu_method, io, mem_load, duration, exp_id)
+        stress_proc = start_stressor(cpu, cpu_method, io, mem_load, vm_workers, duration, exp_id)
         # Start the monitoring thread
         metric_monitor = RLStateBuilder(stress_proc.pid, exp_id, duration, interval)
         metric_monitor.start_monitoring()
@@ -43,7 +43,11 @@ def experiment(scheduler, cpu, cpu_method, io, mem_load, duration, interval):
         log_proc = subprocess.run(f"sudo perf script -i {input} > {output}", shell= True)
         os.remove(input)
         metrics = metric_monitor.build_flat_state()
-        metrics.update(parse_and_calculate_worker_metrics(output))
+        trace_metrics = parse_and_calculate_worker_metrics(output)
+
+        print(trace_metrics)
+
+        metrics.update(trace_metrics)
 
         os.remove(output)
 
@@ -81,7 +85,7 @@ def experiment(scheduler, cpu, cpu_method, io, mem_load, duration, interval):
         return results
 
 
-def start_stressor(cpu_workers, cpu_method, io_workers, mem_load, duration, experiment_id):
+def start_stressor(cpu_workers, cpu_method, io_workers, mem_load, vm_workers, duration, experiment_id):
     """
     Starts stress-ng, now including a fixed, high memory stress (e.g., 5GB)
     to guarantee swap pressure, independent of io_workers.
@@ -89,22 +93,21 @@ def start_stressor(cpu_workers, cpu_method, io_workers, mem_load, duration, expe
     # CRITICAL CHANGE: Set a fixed, large memory request (e.g., 5GB).
     # This value MUST be larger than your physical RAM to force swapping.
     # Adjust '5G' based on your physical RAM size (e.g., if you have 8GB RAM, use '10G').
-    vm_workers = 4 if mem_load > 0 else 0
     vm_bytes = f'{mem_load}G'
     # command_str = f"sudo perf record -e sched:sched_process_fork,sched:sched_process_exit,sched:sched_switch \
     # -a -o {os.path.join(perf_folder, "binary", f'perf.data.{experiment_id}')} -- ./cpu_stress --duration {duration}"
 
     command = [
-    "sudo", "perf", "record",
-    "-e", "sched:sched_process_fork,sched:sched_process_exit,sched:sched_switch",
-    "-a",
-    "-o", f"{perf_folder}/binary/perf.data.{experiment_id}",
-    "--",
-    # "./cpu_stress", "--duration", str(duration)
-]
+        "sudo", "nice", "-n" "-20", "/usr/bin/perf", "record",
+        "-e", "sched:sched_process_fork,sched:sched_process_exit,sched:sched_switch",
+        "-a",
+        "-o", f"{perf_folder}/binary/perf.data.{experiment_id}",
+        "--",
+    ]
 
     command = command + [
         "stress-ng",
+        "--no-rand-seed",
         f"--cpu", str(cpu_workers),
         "--cpu-method", cpu_method,
         f"--io", str(io_workers),
