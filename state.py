@@ -109,8 +109,8 @@ class RLStateBuilder:
 
     def build_state(self):
         """Compute 1-second averages and deltas for the RL state."""
-        if len(self.raw_buffer) < self.buffer_size:
-            return None
+        if len(self.raw_buffer) == 0:
+            return None  # or return a default zero-state
 
         samples = list(self.raw_buffer)
         newest = samples[-1]
