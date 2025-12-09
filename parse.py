@@ -148,13 +148,11 @@ def parse_and_calculate_worker_metrics(log_file_path: str) -> Dict[str, float]:
     avg_tat = valid_tat.mean() if not valid_tat.empty else 0.0
     avg_rt = valid_rt.mean() if not valid_rt.empty else 0.0
     cv_fairness = np.std(cpu_times)/np.mean(cpu_times) if len(cpu_times) > 0 else 0.0
-    avg_cpu_time = cpu_times.mean() if len(cpu_times) > 0 else 0.0
     total_duration = experiment_end_time - experiment_start_time
 
     summary = {
         'Average_TAT': avg_tat,
         'Average_RT': avg_rt,
-        'Average_CPU_Time': avg_cpu_time,
         'Total_Experiment_Duration': total_duration,
         'CV_Fairness': cv_fairness
     }
