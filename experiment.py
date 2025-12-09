@@ -43,10 +43,8 @@ def experiment(scheduler, cpu, cpu_method, io, mem_load, vm_workers, duration, i
         log_proc = subprocess.run(f"sudo perf script -i {input} > {output}", shell= True)
         os.remove(input)
         metrics = metric_monitor.build_flat_state()
+
         trace_metrics = parse_and_calculate_worker_metrics(output)
-
-        print(trace_metrics)
-
         metrics.update(trace_metrics)
 
         os.remove(output)
@@ -107,6 +105,7 @@ def start_stressor(cpu_workers, cpu_method, io_workers, mem_load, vm_workers, du
 
     command = command + [
         "stress-ng",
+        "--taskset", "2,3",
         "--no-rand-seed",
         f"--cpu", str(cpu_workers),
         "--cpu-method", cpu_method,
