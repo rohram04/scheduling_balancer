@@ -113,20 +113,48 @@ def parse_and_calculate_worker_metrics(log_file_path: str) -> Dict[str, float]:
 
             cpu_times.append(data['Total_CPU_Time'])
 
-    avg_tat = total_tat / valid_tat_count if valid_tat_count > 0 else 0.0
-    avg_rt = total_rt / valid_rt_count if valid_rt_count > 0 else 0.0
+        per_pid_rows = []
+    
+    for pid, data in worker_data.items():
+        if data['T_Last_Scheduled_In'] is not None:
+            data['Total_CPU_Time'] += experiment_end_time - data['T_Last_Scheduled_In']
 
-    if cpu_times:
-        cpu_times_array = np.array(cpu_times)
-        mean_cpu = np.mean(cpu_times_array)
-        std_cpu = np.std(cpu_times_array)
-        cv_fairness = std_cpu / mean_cpu if mean_cpu > 0 else 0.0
-    else:
-        cv_fairness = 0.0
+        tat = data['T_Completion'] - data['T_Arrival'] if data['T_Completion'] else None
+        rt = data['T_First_CPU'] - data['T_Arrival'] if data['T_First_CPU'] else None
 
-    return {
+        per_pid_rows.append({
+            'PID': pid,
+            'T_Arrival': data['T_Arrival'],
+            'T_First_CPU': data['T_First_CPU'],
+            'T_Completion': data['T_Completion'],
+            'TAT': tat,
+            'RT': rt,
+            'Total_CPU_Time': data['Total_CPU_Time']
+        })
+
+    # Convert to DataFrame
+    df = pd.DataFrame(per_pid_rows).sort_values('PID')
+
+    valid_tat = df['TAT'].dropna()
+    df = df.dropna(subset=['TAT'])
+
+    df.to_csv("perpid.csv", index=False)
+    print(df)
+
+    # Compute summary statistics
+    valid_rt = df['RT'].dropna()
+    cpu_times = df['Total_CPU_Time'].values
+
+    avg_tat = valid_tat.mean() if not valid_tat.empty else 0.0
+    avg_rt = valid_rt.mean() if not valid_rt.empty else 0.0
+    cv_fairness = np.std(cpu_times)/np.mean(cpu_times) if len(cpu_times) > 0 else 0.0
+    total_duration = experiment_end_time - experiment_start_time
+
+    summary = {
         'Average_TAT': avg_tat,
         'Average_RT': avg_rt,
-        'Total_Experiment_Duration': experiment_end_time - experiment_start_time,
-        'CV_Fairness': float(cv_fairness)
+        'Total_Experiment_Duration': total_duration,
+        'CV_Fairness': cv_fairness
     }
+
+    return summary
